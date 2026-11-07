@@ -13,7 +13,7 @@ from pathlib import Path
 
 from tradingagents.dataflows.symbols import safe_ticker_component
 from tradingagents.forecasts import artifacts, frames, predict
-from tradingagents.forecasts.calendar import CALENDAR_LIMITATION, require_calendar
+from tradingagents.forecasts.calendar import CalendarUnavailable, require_calendar
 from tradingagents.forecasts.constants import (
     AMOUNT_POLICY_OMIT,
     CALENDAR_ID,
@@ -26,6 +26,7 @@ from tradingagents.forecasts.constants import (
     DEFAULT_TEMPERATURE,
     DEFAULT_TIMEZONE,
     DEFAULT_TOP_P,
+    EXCHANGE_CALENDARS_VERSION,
     INFLUENCE_SHADOW,
     KRONOS_REPO,
     LICENSE_NAME,
@@ -139,6 +140,9 @@ def _run(*, ticker, trade_date, config, asset_type, now, bars_loader, predictor_
         temperature = float(config.get("kronos_temperature", DEFAULT_TEMPERATURE))
         top_p = float(config.get("kronos_top_p", DEFAULT_TOP_P))
         datetime.strptime(trade_date, "%Y-%m-%d")
+    except CalendarUnavailable as exc:
+        payload.update(status="unavailable", reason=exc.reason, detail=exc.detail)
+        return _finish(payload, config, attach=False)
     except (TypeError, ValueError) as exc:
         payload.update(status="unavailable", reason="bad_config", detail=str(exc))
         return _finish(payload, config, attach=False)
@@ -169,7 +173,19 @@ def _run(*, ticker, trade_date, config, asset_type, now, bars_loader, predictor_
 
     payload["timezone"] = calendar.timezone
     payload["calendar_id"] = calendar.calendar_id
-    payload["calendar_limitation"] = CALENDAR_LIMITATION
+    payload["calendar_library"] = "exchange-calendars"
+    payload["calendar_library_version"] = calendar.library_version
+    payload["calendar_reviewed_version"] = EXCHANGE_CALENDARS_VERSION
+    payload["calendar_schedule"] = {
+        "first_session": calendar.first_session.isoformat(),
+        "last_session": calendar.last_session.isoformat(),
+    }
+    payload["calendar_limitation"] = calendar.limitation
+    if calendar.library_version != EXCHANGE_CALENDARS_VERSION:
+        payload["notes"].append(
+            f"exchange-calendars {calendar.library_version} differs from the reviewed pin "
+            f"{EXCHANGE_CALENDARS_VERSION}"
+        )
     asof = calendar.analysis_asof(trade_date, now)
     payload["asof"] = asof.isoformat()
     payload["horizons_requested"] = horizons
@@ -258,9 +274,17 @@ def _run(*, ticker, trade_date, config, asset_type, now, bars_loader, predictor_
 
     horizon_payloads = {}
     files = {"observed_ohlcv.csv": observed, "model_input.csv": model_csv}
-    any_failed = False
+    planned = []
     for horizon in horizons:
-        sessions, future = frames.future_stamps(last_session, horizon, calendar)
+        try:
+            sessions, future = frames.future_stamps(last_session, horizon, calendar)
+        except CalendarUnavailable as exc:
+            payload.update(status="unavailable", reason=exc.reason, detail=exc.detail, horizons={})
+            return _finish(payload, config, attach=_attach(config), files=files)
+        planned.append((horizon, sessions, future))
+
+    any_failed = False
+    for horizon, sessions, future in planned:
         try:
             result = predict.forecast_horizon(
                 predictor, model_frame, stamps, future,
@@ -280,6 +304,8 @@ def _run(*, ticker, trade_date, config, asset_type, now, bars_loader, predictor_
             continue
         public = _public_horizon(result, sessions)
         public["conditioning"] = payload["output_conditioning"]
+        _stamp_session_closes(public.get("rows"), sessions, calendar)
+        _stamp_session_closes(public.get("dispersion_rows"), sessions, calendar)
         horizon_payloads[str(horizon)] = public
         if path_count > 1:
             files[f"paths_h{horizon}.csv"] = _paths_frame(result["paths"], public["sessions"])
@@ -381,6 +407,16 @@ def _default_predictor_factory(config: dict, max_context: int):
 def _default_bars_loader():
     from tradingagents.dataflows.vendors.yahoo.kronos_bars import load_split_consistent_daily_bars
     return load_split_consistent_daily_bars
+
+
+def _stamp_session_closes(rows, sessions, calendar) -> None:
+    """Record the exchange close on each forecast row. Early closes stay at 13:00."""
+    if not rows:
+        return
+    for row, day in zip(rows, sessions, strict=True):
+        close = calendar.session_close(day)
+        row["session_close"] = close.isoformat()
+        row["early_close"] = close.hour == 13 and close.minute == 0
 
 
 def _public_horizon(result: dict, sessions: list) -> dict:

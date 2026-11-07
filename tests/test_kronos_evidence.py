@@ -99,7 +99,7 @@ def _config(tmp_path, **overrides) -> dict:
         "kronos_temperature": 0.7,
         "kronos_top_p": 0.9,
         "kronos_amount_policy": "omit",
-        "kronos_calendar": "us_equity_weekday",
+        "kronos_calendar": "XNYS",
         "kronos_timezone": "America/New_York",
         "kronos_device": "cpu",
         "kronos_model_id": MODEL_ID,
@@ -119,7 +119,7 @@ def _home(path: Path) -> Path:
     return path
 
 
-def _run(tmp_path, bars=None, predictor=None, **overrides):
+def _run(tmp_path, bars=None, predictor=None, trade_date=TRADE_DATE, now=NOW, **overrides):
     home = _home(tmp_path / "sibling" / "Kronos")
     frame = _bars() if bars is None else bars
     meta = {"adjustment": {"policy": "yahoo_split_adjusted_ohlc_and_volume", "consistent": True,
@@ -133,9 +133,9 @@ def _run(tmp_path, bars=None, predictor=None, **overrides):
         return predictor or _Predictor()
 
     evidence = run_kronos_evidence(
-        ticker="NVDA", trade_date=TRADE_DATE, asset_type="stock",
+        ticker="NVDA", trade_date=trade_date, asset_type="stock",
         config=_config(tmp_path, kronos_home=str(home), **overrides),
-        now=NOW, bars_loader=loader, predictor_factory=factory,
+        now=now, bars_loader=loader, predictor_factory=factory,
     )
     return evidence, home
 
@@ -207,7 +207,11 @@ def test_forecast_uses_only_completed_bars_and_keeps_observations_separate(tmp_p
     assert forecast["model"]["tokenizer_revision"] == TOKENIZER_REVISION
     assert forecast["model"]["weights_bundled"] is False
     assert forecast["seed"] == 123
-    assert "Weekdays only" in forecast["calendar_limitation"]
+    assert forecast["calendar_id"] == "XNYS"
+    assert "early close" in forecast["calendar_limitation"].lower()
+    assert forecast["horizons"]["2"]["sessions"] == ["2026-08-17", "2026-08-18"]
+    assert forecast["horizons"]["2"]["rows"][0]["session_close"] == "2026-08-17T16:00:00-04:00"
+    assert forecast["horizons"]["2"]["rows"][0]["early_close"] is False
     assert forecast["asof"].startswith("2026-08-14")
     assert forecast["amount"]["volume_source"] == "omitted_to_avoid_synthetic_amount"
     assert forecast["horizons"]["2"]["mean_is_an_uncertainty_interval"] is False
@@ -242,14 +246,37 @@ def test_historical_cutoff_drops_later_sessions_even_if_the_clock_is_later():
 
 
 @pytest.mark.unit
-def test_future_sessions_are_weekdays_after_the_last_completed_bar():
-    calendar = SessionCalendar()
-    days, stamps = frames.future_stamps(datetime(2026, 8, 14).date(), 5, calendar)
-    assert [day.isoformat() for day in days] == [
-        "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21",
-    ]
-    assert list(stamps.dt.hour) == [16, 16, 16, 16, 16]
-    assert list(stamps.dt.minute) == [0, 0, 0, 0, 0]
+def test_forecast_skips_thanksgiving_and_stamps_the_friday_early_close(tmp_path):
+    """A weekday grid would forecast Thursday 2025-11-27 and would not close Friday at 13:00."""
+    from datetime import date
+
+    days = [date(2025, 11, day) for day in (20, 21, 24, 25, 26, 27)]
+    close = [100.0 + offset for offset in range(len(days))]
+    bars = pd.DataFrame({
+        "session_date": days,
+        "open": [price - 1 for price in close],
+        "high": [price + 1 for price in close],
+        "low": [price - 2 for price in close],
+        "close": close,
+        "volume": [100.0] * len(days),
+    })
+    evidence, _home = _run(
+        tmp_path, bars=bars, trade_date="2025-11-26",
+        now=datetime(2025, 11, 26, 18, 0, tzinfo=NY),
+        kronos_horizons="3", kronos_min_bars=4, kronos_lookback=10,
+    )
+    assert evidence.status == "ok"
+    forecast = json.loads((Path(evidence.artifact_dir) / "forecast.json").read_text(encoding="utf-8"))
+    observed = pd.read_csv(Path(evidence.artifact_dir) / "observed_ohlcv.csv")
+    assert "2025-11-27" not in set(observed["session_date"])
+    assert forecast["horizons"]["3"]["sessions"] == ["2025-11-28", "2025-12-01", "2025-12-02"]
+    friday, monday = forecast["horizons"]["3"]["rows"][:2]
+    assert friday["session_close"] == "2025-11-28T13:00:00-05:00"
+    assert friday["early_close"] is True
+    assert monday["session_close"] == "2025-12-01T16:00:00-05:00"
+    assert monday["early_close"] is False
+    from tradingagents.forecasts.verify import verify_forecast_dir
+    assert verify_forecast_dir(Path(evidence.artifact_dir)) == []
 
 
 @pytest.mark.unit

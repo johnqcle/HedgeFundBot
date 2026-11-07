@@ -10,7 +10,7 @@ Changes that need action when upgrading are listed under "Upgrading from" in the
 
 ### Added
 
-- **Kronos shadow forecasts.** Optional quantitative evidence from [Kronos](https://github.com/shiyu-coder/Kronos) (mini model, Tokenizer-2k), written to auditable artifacts before the analysts run. Disabled by default. A missing checkout, missing dependency, or failed inference is an explicit unavailable or failed status and does not invent a forecast. Ratings, size, and stops are unchanged. See `docs/KRONOS.md`.
+- **Kronos shadow forecasts.** Optional quantitative evidence from [Kronos](https://github.com/shiyu-coder/Kronos) (mini model, Tokenizer-2k), written to auditable artifacts before the analysts run. Disabled by default. A missing checkout, missing dependency, or failed inference is an explicit unavailable or failed status and does not invent a forecast. Ratings, size, and stops are unchanged. Session stamps use the NYSE calendar (holidays and early closes), not weekdays. See `docs/KRONOS.md`.
 
 ## [0.7.0] — 2026-10-16
 

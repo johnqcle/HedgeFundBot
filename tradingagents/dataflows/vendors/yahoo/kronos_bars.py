@@ -26,7 +26,7 @@ from tradingagents.dataflows.errors import NoMarketDataError, VendorUnavailableE
 from tradingagents.dataflows.files import replace_file
 from tradingagents.dataflows.symbols import normalize_symbol, safe_ticker_component
 from tradingagents.dataflows.vendors.yahoo.common import yf_retry
-from tradingagents.forecasts.calendar import SessionCalendar
+from tradingagents.forecasts.calendar import CalendarUnavailable, SessionCalendar
 from tradingagents.forecasts.constants import DEFAULT_TIMEZONE
 
 _PRICE = ("open", "high", "low", "close")
@@ -123,7 +123,10 @@ def load_split_consistent_daily_bars(
 def _read_cache(path: str, as_of_date: str, now: datetime) -> pd.DataFrame | None:
     if not os.path.exists(path):
         return None
-    calendar = SessionCalendar()
+    try:
+        calendar = SessionCalendar()
+    except CalendarUnavailable:
+        return None
     written = datetime.fromtimestamp(os.path.getmtime(path), tz=calendar.zone())
     try:
         trade_day = datetime.strptime(as_of_date, "%Y-%m-%d").date()

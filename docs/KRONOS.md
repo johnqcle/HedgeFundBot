@@ -31,6 +31,8 @@ PowerShell, from a new terminal:
 ```powershell
 cd C:\Users\johnq\Projects
 git clone https://github.com/shiyu-coder/Kronos.git
+cd Kronos
+git checkout 67b630e67f6a18c9e9be918d9b4337c960db1e9a
 
 cd C:\Users\johnq\Projects\HedgeFundBot
 python -m venv .venv
@@ -38,7 +40,15 @@ python -m venv .venv
 pip install -e ".[kronos]"
 ```
 
-Do **not** run `pip install -r C:\Users\johnq\Projects\Kronos\requirements.txt` inside this virtual environment. That file pins `pandas==2.2.2`. HedgeFundBot requires pandas 3. The optional extra installs the libraries Kronos imports (torch, einops, huggingface_hub, safetensors, tqdm) without downgrading pandas.
+Confirm the checkout before relying on it:
+
+```powershell
+git -C C:\Users\johnq\Projects\Kronos rev-parse HEAD
+```
+
+That must print `67b630e67f6a18c9e9be918d9b4337c960db1e9a`.
+
+Do **not** run `pip install -r C:\Users\johnq\Projects\Kronos\requirements.txt` inside this virtual environment. That file pins `pandas==2.2.2`. HedgeFundBot requires pandas 3. The optional extra installs torch, einops, huggingface_hub, safetensors, tqdm, and `exchange-calendars==4.13.2` (the NYSE calendar; it imports on pandas 3.0.6) without downgrading pandas.
 
 Kronos itself is MIT. HedgeFundBot stays Apache-2.0. The MIT notice is recorded on every manifest and is not replaced by this repository's license.
 
@@ -56,7 +66,7 @@ TRADINGAGENTS_KRONOS_MIN_BARS=64
 TRADINGAGENTS_KRONOS_SEED=123
 TRADINGAGENTS_KRONOS_PATH_COUNT=1
 TRADINGAGENTS_KRONOS_AMOUNT_POLICY=omit
-TRADINGAGENTS_KRONOS_CALENDAR=us_equity_weekday
+TRADINGAGENTS_KRONOS_CALENDAR=XNYS
 TRADINGAGENTS_KRONOS_TIMEZONE=America/New_York
 ```
 
@@ -105,10 +115,10 @@ Exit code 0 means a forecast was produced. Exit code 2 means it was not. Read `f
 
 ## What the data is
 
-- Timezone `America/New_York`. A daily bar is complete at 16:00. The analysis as-of is the end of the trade date, and never later than the clock. Same-day bars are dropped until that close. Bars after the trade date are dropped.
-- Calendar `us_equity_weekday`: weekdays only. Holidays and early closes are not modeled. The limitation is copied into every manifest. Forecast timestamps can fall on a closed session.
+- Timezone `America/New_York`. The analysis as-of is the end of the trade date, and never later than the clock. A daily bar is kept only when its own XNYS close is at or before that as-of. A regular session closes at 16:00. An early close (the Friday after Thanksgiving, Christmas Eve, and July 3 when those are early in this calendar) is complete at 13:00. Bars after the trade date are dropped. A holiday row is not a session.
+- Calendar `XNYS` from `exchange-calendars==4.13.2`. Forecast timestamps are the next real sessions, at that session's close. Thanksgiving 2025-11-27 is not a session. Friday 2025-11-28 is, and its stamp is 13:00. `us_equity_weekday` is rejected. In this library version, XNAS has the same sessions and open/close times as XNYS from 2024-01-01 through 2026-12-31, so AVGO and UI use one clock. The schedule ends 2027-11-05; past that the run is unavailable instead of inventing weekdays.
 - Yahoo is requested with `auto_adjust=False` and an exclusive end the day after the trade date. Open/High/Low/Close stay on Yahoo's split-adjusted close. Volume is the share volume returned with that close. `Adj Close` is stored on the observed file and is not a model input. This is deliberate: the indicator feed uses `auto_adjust=True`, which dividend-adjusts prices and leaves volume unchanged, so that series is not corporate-action-consistent with volume.
-- Amount is not on Yahoo daily bars. The default policy `omit` does not pass volume either, because upstream `predict` would silently set `amount = volume * mean(open, high, low, close)`. Observed volume remains in `observed_ohlcv.csv`. Set `TRADINGAGENTS_KRONOS_AMOUNT_POLICY=approximate_volume_times_mean_ohlc` only when you want that formula, and the manifest labels it as an approximation. An observed `amount` column, if a future loader supplies one, is passed through and labeled `observed`.
+- Amount is not on Yahoo daily bars. The default policy `omit` does not pass volume either, because upstream `predict` would silently set `amount = volume * mean(open, high, low, close)`. Observed volume remains in `observed_ohlcv.csv`. Set `TRADINGAGENTS_KRONOS_AMOUNT_POLICY=approximate_volume_times_mean_ohlc` only when you want that formula, and the manifest labels it as an approximation. An observed `amount` column, if a future loader supplies one, is passed through and labeled `observed`. When volume and amount are omitted, the model still emits those two columns, conditioned on zeros. They are not a share-volume forecast. `--check` judges open, high, low, and close only.
 - One path (`KRONOS_PATH_COUNT=1`) uses top-1 sampling and the configured seed. It is one draw, not a confidence band. A path count from 2 to 8 stores each path and reports the arithmetic mean plus the sample standard deviation. That spread is not a probability.
 - The pretraining sample end date is **unknown**. The paper (arXiv:2508.02739), the upstream README, and the Kronos-mini model card do not publish one. Every manifest sets `pretraining_contamination` to `unknown`. A backtest on history the model may have trained on is not out-of-sample.
 
@@ -132,15 +142,25 @@ The result always includes these caveats:
 - Beating the flat close is not permission to change a rating, a size, or a stop.
 - Pretraining contamination is unknown, so scores on older history are not out-of-sample skill.
 - Re-downloading split-adjusted Yahoo history can revise prices after the origin date.
-- The weekday calendar misses holidays and early closes.
+- Forecast stamps have to be real XNYS sessions. A weekday grid puts a close on a holiday and misses an early close.
 - Sample dispersion is not a calibrated probability and is not part of the score.
 - Agreement with RSI, MACD, or any other indicator computed from the same prices is not independent confirmation and must not raise confidence.
 
 Decision influence stays unimplemented on purpose. `kronos_influence=decision` is rejected.
 
-## Smoke test
+## Real-inference smoke for the latest completed AVGO and UI bars
 
-The default `pytest` run does not download weights. To exercise the pinned mini model and Tokenizer-2k on a synthetic window (no API key, no broker):
+This does not start TradingAgents, does not call xAI, and does not talk to a broker. It does download Yahoo daily bars and, the first time, the pinned Hugging Face weights. Run it only after the checkout above is at the pinned commit and `.env` points `TRADINGAGENTS_KRONOS_HOME` at `C:\Users\johnq\Projects\Kronos`.
+
+```powershell
+cd C:\Users\johnq\Projects\HedgeFundBot
+.\.venv\Scripts\Activate.ps1
+python -m tradingagents.forecasts --ticker AVGO --ticker UI --latest-completed --check
+```
+
+`--latest-completed` is the most recent XNYS session whose close is already in the past. `--check` exits 2 unless every artifact meets the rules below. Exit 0 means both symbols passed. The command prints the session date it used.
+
+A synthetic-window test, with no Yahoo call, is:
 
 ```powershell
 $env:KRONOS_SMOKE_HOME = "C:\Users\johnq\Projects\Kronos"
@@ -148,3 +168,16 @@ pytest -m integration tests/test_kronos_inference_smoke.py
 ```
 
 `KRONOS_SMOKE_HOME` is not a `TRADINGAGENTS_*` variable. The test suite clears those so a local `.env` cannot change defaults.
+
+### What `--check` requires
+
+For each of `AVGO` and `UI`, under `%USERPROFILE%\.tradingagents\logs\kronos\<TICKER>_<session>\`:
+
+- `forecast.json` has `status` `ok`, `influence` `shadow`, and `decision_influence`, `rating_changed`, `stops_changed`, `sizing_changed`, and `confidence_adjusted` all false.
+- Model `NeoQuasar/Kronos-mini` revision `f4e68697d9d5aed55cef5c96aabc3376bcad9f81` and tokenizer `NeoQuasar/Kronos-Tokenizer-2k` revision `26966d0035065a0cae0ebad7af8ece35bc1fb51c`. `weights_bundled` is false.
+- `calendar_id` is `XNYS`. `pretraining_contamination` is `unknown`.
+- Every observed session is an XNYS session, is complete at the recorded as-of, and is not after the trade date.
+- Horizons 5 and 20 (the defaults) are the next 5 and 20 XNYS sessions after the last observed session. No holiday appears. Each row's `session_close` is that session's exchange close, 13:00 on an early close and 16:00 otherwise.
+- Every forecast open, high, low, and close is a positive finite number.
+- Forecast sessions are not in `observed_ohlcv.csv`. `sample_count` passed to `predict` is 1. The mean is not labeled as an uncertainty interval.
+- If amount was approximated, the manifest names the formula `volume * mean(open, high, low, close)`. The default `omit` policy does not do that.

@@ -69,13 +69,19 @@ def completed_history(
     frame = bars.copy()
     frame["session_date"] = frame["session_date"].map(_as_date)
     notes: list[str] = []
-    dropped = {"undated": 0, "non_session": 0, "future_or_incomplete": 0, "invalid_ohlc": 0}
+    dropped = {
+        "undated": 0, "non_session": 0, "out_of_range": 0,
+        "future_or_incomplete": 0, "invalid_ohlc": 0,
+    }
 
     keep_index: list = []
     for idx, row in frame.iterrows():
         session = row["session_date"]
         if session is None:
             dropped["undated"] += 1
+            continue
+        if not calendar.covers(session):
+            dropped["out_of_range"] += 1
             continue
         if not calendar.is_session(session):
             dropped["non_session"] += 1

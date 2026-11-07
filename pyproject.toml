@@ -35,6 +35,8 @@ dev = [
     "ruff>=0.16",
     "pytest>=8.0",
     "pytest-subtests>=0.13",
+    # Holiday tests import the same pin the Kronos extra installs.
+    "exchange-calendars==4.13.2",
 ]
 # Amazon Bedrock support (AWS SigV4 auth + boto3). Optional so the core install
 # stays lean: pip install "tradingagents[bedrock]".
@@ -49,6 +51,8 @@ kronos = [
     "huggingface_hub>=0.33.1",
     "safetensors>=0.6.2",
     "tqdm>=4.67.1",
+    # XNYS holidays and early closes. 4.13.2 imports on pandas 3.0.6.
+    "exchange-calendars==4.13.2",
 ]
 
 [project.scripts]

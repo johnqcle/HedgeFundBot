@@ -70,7 +70,7 @@ def test_kronos_mini_smoke_on_a_synthetic_window(tmp_path):
         "kronos_seed": 123,
         "kronos_device": "cpu",
         "kronos_amount_policy": "omit",
-        "kronos_calendar": "us_equity_weekday",
+        "kronos_calendar": "XNYS",
         "kronos_timezone": "America/New_York",
         "results_dir": str(tmp_path),
     }

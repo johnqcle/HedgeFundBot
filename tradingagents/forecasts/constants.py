@@ -39,8 +39,11 @@ PRETRAINING_NOTE = (
 INFLUENCE_SHADOW = "shadow"
 AMOUNT_POLICY_OMIT = "omit"
 AMOUNT_POLICY_APPROXIMATE = "approximate_volume_times_mean_ohlc"
-CALENDAR_ID = "us_equity_weekday"
+CALENDAR_ID = "XNYS"
 DEFAULT_TIMEZONE = "America/New_York"
+# Pinned after a run against pandas 3.0.6. Holiday and early-close tests
+# describe this version's XNYS schedule; bump the pin and the tests together.
+EXCHANGE_CALENDARS_VERSION = "4.13.2"
 DEFAULT_HORIZONS = "5,20"
 DEFAULT_LOOKBACK = 256
 DEFAULT_MIN_BARS = 64

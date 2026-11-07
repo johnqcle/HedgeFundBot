@@ -24,7 +24,7 @@ CAVEATS: tuple[str, ...] = (
     PRETRAINING_NOTE,
     "Split-adjusted history can be revised after the origin date. A backtest "
     "that re-downloads it is not the series that existed at the cutoff.",
-    "The built-in calendar is weekdays only. Holidays and early closes are not sessions in these stamps.",
+    "Origins and forecast stamps have to follow the exchange schedule (XNYS holidays and early closes). A weekday grid puts a timestamp on a closed session.",
     "Dispersion across Kronos samples is not a calibrated probability and is not an input to these scores.",
     "Agreement between a Kronos path and an indicator computed from the same prices is not independent evidence and does not raise confidence.",
     "Decision influence stays off until a rolling-origin result is produced under these rules on data after a known pretraining cutoff.",
