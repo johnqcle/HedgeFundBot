@@ -1,5 +1,25 @@
 import os
 
+from tradingagents.forecasts.constants import (
+    AMOUNT_POLICY_OMIT,
+    CALENDAR_ID,
+    DEFAULT_DEVICE,
+    DEFAULT_HORIZONS,
+    DEFAULT_LOOKBACK,
+    DEFAULT_MIN_BARS,
+    DEFAULT_PATH_COUNT,
+    DEFAULT_SEED,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TIMEZONE,
+    DEFAULT_TOP_P,
+    INFLUENCE_SHADOW,
+    MAX_CONTEXT,
+    MODEL_ID,
+    MODEL_REVISION,
+    TOKENIZER_ID,
+    TOKENIZER_REVISION,
+)
+
 _TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
 
 # Single source of truth for env-var → config-key overrides. To expose
@@ -33,6 +53,28 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    # Kronos shadow forecasts. Off unless enabled. The home path is a sibling
+    # checkout, never a directory inside this repository.
+    "TRADINGAGENTS_KRONOS_ENABLED":              "kronos_enabled",
+    "TRADINGAGENTS_KRONOS_HOME":                 "kronos_home",
+    "TRADINGAGENTS_KRONOS_INFLUENCE":            "kronos_influence",
+    "TRADINGAGENTS_KRONOS_ATTACH":               "kronos_attach_to_market_analyst",
+    "TRADINGAGENTS_KRONOS_MODEL_ID":             "kronos_model_id",
+    "TRADINGAGENTS_KRONOS_MODEL_REVISION":       "kronos_model_revision",
+    "TRADINGAGENTS_KRONOS_TOKENIZER_ID":         "kronos_tokenizer_id",
+    "TRADINGAGENTS_KRONOS_TOKENIZER_REVISION":   "kronos_tokenizer_revision",
+    "TRADINGAGENTS_KRONOS_MAX_CONTEXT":          "kronos_max_context",
+    "TRADINGAGENTS_KRONOS_LOOKBACK":             "kronos_lookback",
+    "TRADINGAGENTS_KRONOS_MIN_BARS":             "kronos_min_bars",
+    "TRADINGAGENTS_KRONOS_HORIZONS":             "kronos_horizons",
+    "TRADINGAGENTS_KRONOS_DEVICE":               "kronos_device",
+    "TRADINGAGENTS_KRONOS_SEED":                 "kronos_seed",
+    "TRADINGAGENTS_KRONOS_PATH_COUNT":           "kronos_path_count",
+    "TRADINGAGENTS_KRONOS_TEMPERATURE":          "kronos_temperature",
+    "TRADINGAGENTS_KRONOS_TOP_P":                "kronos_top_p",
+    "TRADINGAGENTS_KRONOS_AMOUNT_POLICY":        "kronos_amount_policy",
+    "TRADINGAGENTS_KRONOS_CALENDAR":             "kronos_calendar",
+    "TRADINGAGENTS_KRONOS_TIMEZONE":             "kronos_timezone",
 }
 
 
@@ -216,6 +258,29 @@ def build_default_config() -> dict:
             ".SA":  "^BVSP",       # B3 Brazil (Ibovespa)
             "":     "SPY",         # default for US-listed tickers (no suffix)
         },
+        # Kronos (shiyu-coder/Kronos) as shadow forecast evidence. Off by default
+        # so a run that does not set TRADINGAGENTS_KRONOS_ENABLED is unchanged.
+        # Influence stays "shadow": nothing here sizes a position or edits a rating.
+        "kronos_enabled": False,
+        "kronos_home": "",
+        "kronos_influence": INFLUENCE_SHADOW,
+        "kronos_attach_to_market_analyst": False,
+        "kronos_model_id": MODEL_ID,
+        "kronos_model_revision": MODEL_REVISION,
+        "kronos_tokenizer_id": TOKENIZER_ID,
+        "kronos_tokenizer_revision": TOKENIZER_REVISION,
+        "kronos_max_context": MAX_CONTEXT,
+        "kronos_lookback": DEFAULT_LOOKBACK,
+        "kronos_min_bars": DEFAULT_MIN_BARS,
+        "kronos_horizons": DEFAULT_HORIZONS,
+        "kronos_device": DEFAULT_DEVICE,
+        "kronos_seed": DEFAULT_SEED,
+        "kronos_path_count": DEFAULT_PATH_COUNT,
+        "kronos_temperature": DEFAULT_TEMPERATURE,
+        "kronos_top_p": DEFAULT_TOP_P,
+        "kronos_amount_policy": AMOUNT_POLICY_OMIT,
+        "kronos_calendar": CALENDAR_ID,
+        "kronos_timezone": DEFAULT_TIMEZONE,
 
     })
 

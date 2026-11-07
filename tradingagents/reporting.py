@@ -43,6 +43,12 @@ def _header(ticker: str, final_state: dict, settings: dict | None) -> str:
             lines.append("- Data vendors: " + ", ".join(f"{k} {v}" for k, v in vendors.items()))
     if final_state.get("memory_note"):
         lines.append(f"- Memory log: {final_state['memory_note']}")
+    kronos_status = final_state.get("kronos_status")
+    if kronos_status not in (None, "", "disabled"):
+        lines.append(
+            f"- Kronos shadow evidence: {kronos_status} "
+            "(not a rating, size, or stop input)"
+        )
     return "\n".join(lines) + "\n\n"
 
 
@@ -86,6 +92,13 @@ def _report_parts(final_state: dict) -> list[tuple[str, str, list[tuple[str, str
                 written.append((agent, filename, value))
         if written:
             parts.append((heading, folder, written))
+    kronos = (final_state.get("kronos_evidence") or "").strip()
+    if (final_state.get("kronos_status") not in (None, "", "disabled")) and kronos:
+        parts.append((
+            "VI. Kronos shadow evidence",
+            "6_kronos",
+            [("Kronos shadow evidence", "evidence.md", kronos)],
+        ))
     return parts
 
 

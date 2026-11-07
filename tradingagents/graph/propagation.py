@@ -62,6 +62,11 @@ class Propagator:
             "fundamentals_report": "",
             "sentiment_report": "",
             "news_report": "",
+            # Overwritten by the Kronos Evidence step. Disabled leaves the prompt unchanged.
+            "kronos_status": "disabled",
+            "kronos_evidence": "",
+            "kronos_artifact_dir": "",
+            "kronos_attach_to_market_analyst": False,
         }
 
     def get_graph_args(self, callbacks: list | None = None) -> dict[str, Any]:
