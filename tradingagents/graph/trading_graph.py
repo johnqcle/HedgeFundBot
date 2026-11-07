@@ -185,6 +185,9 @@ class TradingAgentsGraph:
             # before the Memory Log step would resume without the lessons.
             "analysts=parallel",
             "memory=parallel",
+            # The evidence step sits in front of the analysts. A checkpoint from
+            # a graph without it has a start edge this graph no longer has.
+            "kronos=before_analysts",
             f"settings={digest}",
         ])
 
@@ -296,6 +299,14 @@ class TradingAgentsGraph:
             "output_language": cfg.get("output_language"),
             "data_vendors": dict(cfg.get("data_vendors") or {}),
             "tool_vendors": dict(cfg.get("tool_vendors") or {}),
+            # Model ids and the shadow flag only. The checkout path is a local
+            # path and stays out of the report settings, same as results_dir.
+            "kronos_enabled": bool(cfg.get("kronos_enabled")),
+            "kronos_influence": cfg.get("kronos_influence") or "shadow",
+            "kronos_model_id": cfg.get("kronos_model_id"),
+            "kronos_model_revision": cfg.get("kronos_model_revision"),
+            "kronos_tokenizer_id": cfg.get("kronos_tokenizer_id"),
+            "kronos_tokenizer_revision": cfg.get("kronos_tokenizer_revision"),
         }
 
     def save_reports(self, final_state, ticker, save_path=None, html=True) -> Path:
@@ -489,6 +500,12 @@ class TradingAgentsGraph:
             "final_rating": run_rating(final_state),
             "run_settings": self.run_settings(),
         }
+        # Present only when a run actually asked Kronos for evidence. A disabled
+        # run keeps the previous log shape.
+        if final_state.get("kronos_status") not in (None, "", "disabled"):
+            entry["kronos_status"] = final_state.get("kronos_status")
+            entry["kronos_evidence"] = final_state.get("kronos_evidence") or ""
+            entry["kronos_artifact_dir"] = final_state.get("kronos_artifact_dir") or ""
 
         # A ticker that would escape the results directory is rejected.
         safe_ticker = safe_ticker_component(final_state["company_of_interest"])

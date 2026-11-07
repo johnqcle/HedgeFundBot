@@ -374,6 +374,13 @@ def run_analysis(checkpoint: bool | None = None, portfolio=None, flags=None):
 
     # Post-analysis prompts (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
+    kronos_status = final_state.get("kronos_status")
+    if kronos_status not in (None, "", "disabled"):
+        console.print(
+            f"[dim]Kronos shadow evidence ({kronos_status}) is not a rating, size, or stop.[/dim]"
+        )
+        if final_state.get("kronos_artifact_dir"):
+            console.print(f"  [dim]Artifacts:[/dim] {final_state['kronos_artifact_dir']}")
 
     # A decision nobody can read is not a position. Say so here rather than
     # leaving the run to look like a normal result.

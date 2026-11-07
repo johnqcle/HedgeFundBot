@@ -8,3 +8,8 @@ __pycache__/
 __pycache__/
 *.zip
 x_cache/
+
+# Kronos is a separate MIT-licensed checkout. Do not nest it in this repo.
+/Kronos/
+/vendor/Kronos/
+/third_party/Kronos/

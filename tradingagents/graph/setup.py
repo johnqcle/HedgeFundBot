@@ -22,6 +22,7 @@ from tradingagents.agents import (
 )
 from tradingagents.agents.analysts.turn import WRAP_UP
 from tradingagents.agents.state import AgentState
+from tradingagents.forecasts.node import kronos_evidence_node
 
 from .analyst_execution import build_analyst_execution_plan
 from .conditional_logic import ConditionalLogic
@@ -141,6 +142,10 @@ class GraphSetup:
 
         workflow = StateGraph(AgentState)
 
+        # Kronos, when enabled, files shadow evidence before anyone reads state.
+        # Disabled, the node returns immediately and adds no prompt text.
+        workflow.add_node("Kronos Evidence", kronos_evidence_node)
+
         for spec in plan.specs:
             workflow.add_node(spec.agent_node,
                               _analyst_graph(spec, analyst_factories[spec.key](), self.max_tool_rounds))
@@ -154,15 +159,17 @@ class GraphSetup:
         workflow.add_node("Conservative Analyst", conservative_analyst)
         workflow.add_node("Portfolio Manager", portfolio_manager_node)
 
-        # The analysts work at the same time; the research debate starts once
-        # every one of them has filed its report. The memory log settles past
-        # decisions alongside them: only the Portfolio Manager reads its lessons.
+        # Kronos runs first so its evidence is already on the state. The analysts
+        # then work at the same time; the research debate starts once every one
+        # of them has filed its report. The memory log settles past decisions
+        # alongside them: only the Portfolio Manager reads its lessons.
+        workflow.add_edge(START, "Kronos Evidence")
         first_steps = [spec.agent_node for spec in plan.specs]
         if memory_node is not None:
             workflow.add_node("Memory Log", memory_node)
             first_steps.append("Memory Log")
         for node in first_steps:
-            workflow.add_edge(START, node)
+            workflow.add_edge("Kronos Evidence", node)
         workflow.add_edge(first_steps, "Bull Researcher")
 
         # Both research-debate edges share the complete DEBATE_PATH_MAP (#1088).

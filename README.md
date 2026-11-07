@@ -64,6 +64,12 @@ Reports are saved under `~/.tradingagents/logs/reports/<TICKER>_<date>/`, includ
 ### Optional: X sentiment data
 Save posts for a ticker and trade date to `x_cache/<TICKER>_<YYYY-MM-DD>.json` (format documented at the top of `x_posts.py`), or point `X_CACHE_DIR` elsewhere. If no file exists, the sentiment analyst is told the X data is missing and carries on.
 
+### Optional: Kronos shadow forecasts
+
+[Kronos](https://github.com/shiyu-coder/Kronos) can write a quantitative forecast beside a run. It does not replace the analysts, the debate, or the risk team, and it does not change ratings, size, or stops. It is off unless `TRADINGAGENTS_KRONOS_ENABLED=true`. If the model cannot be loaded, the run continues and the artifact says the forecast is unavailable. It does not invent prices.
+
+Clone Kronos **beside** this repository (`C:\Users\johnq\Projects\Kronos` on the intended Windows machine), not inside it. Setup, the artifact layout, and the rolling-origin checks required before any decision influence are in [`docs/KRONOS.md`](docs/KRONOS.md).
+
 ## License
 
 Apache 2.0, same as TradingAgents. See `LICENSE`.
